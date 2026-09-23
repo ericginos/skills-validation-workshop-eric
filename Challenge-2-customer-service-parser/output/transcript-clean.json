@@ -1,0 +1,10 @@
+{
+  "call_id": "CS-1001",
+  "date": "2026-07-01 09:42 UTC",
+  "customer": "Jamie Rivera",
+  "agent": "Priya Singh",
+  "product": "SnowWatch Mobile App",
+  "issue": "Customer cannot receive password reset email.",
+  "resolution": "Agent verified account email, reset lockout, and resent reset link.",
+  "escalate": "no"
+}
