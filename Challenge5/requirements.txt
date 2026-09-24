@@ -1,0 +1,8 @@
+google-genai>=1.0.0
+google-cloud-modelarmor>=0.7.0
+google-cloud-bigquery>=3.25.0
+google-cloud-dlp>=3.20.0
+google-cloud-logging>=3.11.0
+streamlit>=1.40.0
+pydantic>=2.8.0
+pypdf>=5.0.0
