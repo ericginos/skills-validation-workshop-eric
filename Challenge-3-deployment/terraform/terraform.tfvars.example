@@ -1,0 +1,19 @@
+# Example Terraform Variables File
+# Rename to terraform.tfvars and customize with your GCP environment parameters
+
+project_id             = "your-gcp-project-id"
+region                 = "us-central1"
+bigquery_location      = "US"
+vpc_name               = "vpc-customer-service"
+subnet_name            = "sb-customer-service-private"
+subnet_cidr            = "10.0.1.0/24"
+vpc_connector_name     = "vpc-conn-transcript"
+vpc_connector_cidr     = "10.8.0.0/28"
+dataset_name           = "customer_service"
+table_name             = "transcripts"
+service_name           = "customer-service-parser"
+artifact_repo_name     = "customer-service-parser-repo"
+cloud_run_sa_name      = "sa-customer-service-app"
+cloud_build_sa_name    = "sa-cloudbuild-deployer"
+gemini_model           = "gemini-2.5-flash"
+allow_unauthenticated  = true

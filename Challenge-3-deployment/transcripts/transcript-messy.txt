@@ -1,0 +1,16 @@
+Support Session Reference: INC-44912
+Recorded on 07/02/2026, 13:08 PST
+Caller Name - M. Thompson
+Representative: Eli K.
+Service: ADS Field Alerts Portal
+
+Problem Summary
+- user keeps getting "token expired" after login
+- also mentioned they saw random duplicate alerts in dashboard
+
+What happened next:
+Eli asked caller to clear browser cache, try private window, and disable old bookmark.
+Caller still hit the token issue intermittently.
+Escalation likely required to backend auth team if issue repeats after 24h.
+
+Follow-up promised by agent tomorrow morning.

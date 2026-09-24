@@ -1,0 +1,128 @@
+# ==============================================================================
+# Cloud Build CI/CD Pipeline for Customer Service Transcript Parser
+#
+# Automates:
+# 1. Building and tagging the container image
+# 2. Pushing the image to Google Artifact Registry
+# 3. Initializing Terraform with GCS remote state backend
+# 4. Generating Terraform plan for infrastructure changes
+# 5. Applying Terraform configuration to provision GCP resources
+# 6. Verifying Cloud Run deployment and running endpoint smoke test
+# ==============================================================================
+
+steps:
+  # ----------------------------------------------------------------------------
+  # Step 1: Build Container Image
+  # ----------------------------------------------------------------------------
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'build-image'
+    args:
+      - 'build'
+      - '-t'
+      - '${_LOCATION}-docker.pkg.dev/${PROJECT_ID}/${_REPO_NAME}/${_IMAGE_NAME}:${SHORT_SHA}'
+      - '-t'
+      - '${_LOCATION}-docker.pkg.dev/${PROJECT_ID}/${_REPO_NAME}/${_IMAGE_NAME}:latest'
+      - '-f'
+      - 'Dockerfile'
+      - '.'
+
+  # ----------------------------------------------------------------------------
+  # Step 2: Push Container Image to Artifact Registry
+  # ----------------------------------------------------------------------------
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'push-image-sha'
+    args:
+      - 'push'
+      - '${_LOCATION}-docker.pkg.dev/${PROJECT_ID}/${_REPO_NAME}/${_IMAGE_NAME}:${SHORT_SHA}'
+
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'push-image-latest'
+    args:
+      - 'push'
+      - '${_LOCATION}-docker.pkg.dev/${PROJECT_ID}/${_REPO_NAME}/${_IMAGE_NAME}:latest'
+
+  # ----------------------------------------------------------------------------
+  # Step 3: Terraform Init with GCS Remote State
+  # ----------------------------------------------------------------------------
+  - name: 'hashicorp/terraform:1.8.5'
+    id: 'terraform-init'
+    args:
+      - 'init'
+      - '-backend-config=bucket=${_STATE_BUCKET}'
+      - '-backend-config=prefix=transcript-parser/state'
+
+  # ----------------------------------------------------------------------------
+  # Step 4: Terraform Plan
+  # ----------------------------------------------------------------------------
+  - name: 'hashicorp/terraform:1.8.5'
+    id: 'terraform-plan'
+    args:
+      - 'plan'
+      - '-var=project_id=${PROJECT_ID}'
+      - '-var=region=${_LOCATION}'
+      - '-var=artifact_repo_name=${_REPO_NAME}'
+      - '-var=service_name=${_SERVICE_NAME}'
+      - '-var=container_image=${_LOCATION}-docker.pkg.dev/${PROJECT_ID}/${_REPO_NAME}/${_IMAGE_NAME}:${SHORT_SHA}'
+      - '-out=tfplan'
+
+  # ----------------------------------------------------------------------------
+  # Step 5: Terraform Apply
+  # ----------------------------------------------------------------------------
+  - name: 'hashicorp/terraform:1.8.5'
+    id: 'terraform-apply'
+    args:
+      - 'apply'
+      - '-auto-approve'
+      - 'tfplan'
+
+  # ----------------------------------------------------------------------------
+  # Step 6: Deploy / Update Cloud Run Service Verification
+  # ----------------------------------------------------------------------------
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:slim'
+    id: 'verify-cloud-run'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        echo "=========================================================="
+        echo "Verifying Cloud Run Deployment"
+        echo "=========================================================="
+        SERVICE_URL=$$(gcloud run services describe ${_SERVICE_NAME} \
+          --project=${PROJECT_ID} \
+          --region=${_LOCATION} \
+          --format='value(status.url)')
+        
+        echo "Cloud Run Service URL: $${SERVICE_URL}"
+        
+        if [ -n "$${SERVICE_URL}" ]; then
+          echo "Running health check probe on $${SERVICE_URL}/health..."
+          for i in $$(seq 1 12); do
+            HTTP_STATUS=$$(curl -s -o /tmp/health_resp.json -w "%{http_code}" "$${SERVICE_URL}/health" || echo "000")
+            if [ "$$HTTP_STATUS" -eq 200 ]; then
+              echo "Health check succeeded (HTTP 200)!"
+              cat /tmp/health_resp.json
+              echo ""
+              exit 0
+            fi
+            echo "Attempt $$i: HTTP status $$HTTP_STATUS. Waiting 5s for service warm-up..."
+            sleep 5
+          done
+          echo "Warning: Service deployed but health check returned status $$HTTP_STATUS"
+        else
+          echo "Error: Could not retrieve Service URL."
+          exit 1
+        fi
+
+substitutions:
+  _LOCATION: 'us-central1'
+  _REPO_NAME: 'customer-service-parser-repo'
+  _IMAGE_NAME: 'transcript-parser'
+  _SERVICE_NAME: 'customer-service-parser'
+  _STATE_BUCKET: '${PROJECT_ID}-tfstate'
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+
+images:
+  - '${_LOCATION}-docker.pkg.dev/${PROJECT_ID}/${_REPO_NAME}/${_IMAGE_NAME}:${SHORT_SHA}'
+  - '${_LOCATION}-docker.pkg.dev/${PROJECT_ID}/${_REPO_NAME}/${_IMAGE_NAME}:latest'

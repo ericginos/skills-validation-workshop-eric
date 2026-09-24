@@ -1,0 +1,13 @@
+Call ID: CS-1001
+Date: 2026-07-01 09:42 UTC
+Customer: Jamie Rivera
+Agent: Priya Singh
+Product: SnowWatch Mobile App
+Issue: Customer cannot receive password reset email.
+Resolution: Agent verified account email, reset lockout, and resent reset link.
+Escalate: no
+
+Transcript:
+Customer says they requested password reset multiple times but no email arrived.
+Agent confirms typo in account email and updates it after verification.
+Customer confirms they can now sign in.

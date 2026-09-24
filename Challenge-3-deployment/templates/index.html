@@ -1,0 +1,1045 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Customer Service Transcript Parser &amp; BigQuery Ingestion</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;700&family=Roboto+Mono:wght@400;500&family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --primary: #1a73e8;
+      --primary-hover: #1557b0;
+      --primary-light: #e8f0fe;
+      --success: #1e8e3e;
+      --success-light: #e6f4ea;
+      --warning: #f9ab00;
+      --warning-light: #fef7e0;
+      --danger: #d93025;
+      --danger-light: #fce8e6;
+      --text: #202124;
+      --text-muted: #5f6368;
+      --border: #dadce0;
+      --bg: #f8f9fa;
+      --card-bg: #ffffff;
+      --shadow-sm: 0 1px 2px 0 rgba(60,64,67,0.3), 0 1px 3px 1px rgba(60,64,67,0.15);
+      --shadow-md: 0 2px 6px 2px rgba(60,64,67,0.15);
+      --radius: 8px;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Roboto', -apple-system, BlinkMacSystemFont, sans-serif;
+      background-color: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+      padding-bottom: 60px;
+    }
+
+    /* Navbar / Header */
+    header {
+      background-color: var(--card-bg);
+      border-bottom: 1px solid var(--border);
+      padding: 16px 24px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .header-inner {
+      max-width: 1200px;
+      margin: 0 auto;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .logo-area {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .logo-icon {
+      width: 40px;
+      height: 40px;
+      background: linear-gradient(135deg, #1a73e8, #4285f4);
+      color: white;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 22px;
+      box-shadow: 0 2px 4px rgba(26,115,232,0.3);
+    }
+
+    .logo-text h1 {
+      font-family: 'Google Sans', sans-serif;
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: var(--text);
+    }
+
+    .logo-text p {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+    }
+
+    .badges {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 16px;
+      font-size: 0.75rem;
+      font-weight: 500;
+    }
+
+    .badge-gcp {
+      background-color: var(--primary-light);
+      color: var(--primary-hover);
+      border: 1px solid rgba(26,115,232,0.2);
+    }
+
+    .badge-bq {
+      background-color: #f3e8fd;
+      color: #7627bb;
+      border: 1px solid rgba(118,39,187,0.2);
+    }
+
+    .badge-model {
+      background-color: #e6f4ea;
+      color: #137333;
+      border: 1px solid rgba(19,115,51,0.2);
+    }
+
+    /* Main Container */
+    main {
+      max-width: 1200px;
+      margin: 28px auto;
+      padding: 0 20px;
+    }
+
+    /* Flash Messages */
+    .alerts {
+      margin-bottom: 24px;
+    }
+
+    .alert {
+      padding: 12px 16px;
+      border-radius: var(--radius);
+      margin-bottom: 12px;
+      font-size: 0.9rem;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .alert-danger {
+      background-color: var(--danger-light);
+      color: var(--danger);
+      border: 1px solid rgba(217,48,37,0.3);
+    }
+
+    .alert-warning {
+      background-color: var(--warning-light);
+      color: #b06000;
+      border: 1px solid rgba(249,171,0,0.3);
+    }
+
+    .alert-success {
+      background-color: var(--success-light);
+      color: var(--success);
+      border: 1px solid rgba(30,142,62,0.3);
+    }
+
+    /* Grid layout */
+    .grid-container {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 24px;
+    }
+
+    /* Card styling */
+    .card {
+      background: var(--card-bg);
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow-sm);
+      overflow: hidden;
+      transition: box-shadow 0.2s ease;
+    }
+
+    .card:hover {
+      box-shadow: var(--shadow-md);
+    }
+
+    .card-header {
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border);
+      background-color: #ffffff;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .card-title {
+      font-family: 'Google Sans', sans-serif;
+      font-size: 1.1rem;
+      font-weight: 500;
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .card-body {
+      padding: 20px;
+    }
+
+    /* Tabs */
+    .tab-bar {
+      display: flex;
+      gap: 8px;
+      border-bottom: 2px solid var(--border);
+      margin-bottom: 16px;
+    }
+
+    .tab-btn {
+      padding: 8px 16px;
+      background: none;
+      border: none;
+      font-size: 0.9rem;
+      font-weight: 500;
+      color: var(--text-muted);
+      cursor: pointer;
+      position: relative;
+      bottom: -2px;
+      border-bottom: 2px solid transparent;
+      transition: all 0.2s;
+    }
+
+    .tab-btn.active {
+      color: var(--primary);
+      border-bottom-color: var(--primary);
+    }
+
+    .tab-content {
+      display: none;
+    }
+
+    .tab-content.active {
+      display: block;
+    }
+
+    /* Drop Zone */
+    .drop-zone {
+      border: 2px dashed #b8c7db;
+      border-radius: var(--radius);
+      padding: 36px 20px;
+      text-align: center;
+      background-color: #fcfdfe;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .drop-zone:hover, .drop-zone.dragover {
+      border-color: var(--primary);
+      background-color: var(--primary-light);
+    }
+
+    .drop-zone-icon {
+      font-size: 40px;
+      color: var(--primary);
+      margin-bottom: 10px;
+    }
+
+    .drop-zone-title {
+      font-weight: 500;
+      font-size: 1rem;
+      color: var(--text);
+      margin-bottom: 4px;
+    }
+
+    .drop-zone-subtitle {
+      font-size: 0.825rem;
+      color: var(--text-muted);
+    }
+
+    .file-input {
+      display: none;
+    }
+
+    .selected-file-info {
+      display: none;
+      margin-top: 12px;
+      padding: 10px 14px;
+      background-color: #e8f0fe;
+      border-radius: 6px;
+      color: var(--primary-hover);
+      font-size: 0.875rem;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .selected-file-info.visible {
+      display: flex;
+    }
+
+    /* Form elements */
+    .form-group {
+      margin-bottom: 16px;
+    }
+
+    label {
+      display: block;
+      font-size: 0.85rem;
+      font-weight: 500;
+      color: var(--text);
+      margin-bottom: 6px;
+    }
+
+    textarea.form-control, input.form-control {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-family: inherit;
+      font-size: 0.9rem;
+      background: white;
+      transition: border-color 0.2s;
+    }
+
+    textarea.form-control {
+      font-family: 'Roboto Mono', monospace;
+      font-size: 0.85rem;
+      min-height: 140px;
+      resize: vertical;
+    }
+
+    textarea.form-control:focus, input.form-control:focus {
+      outline: none;
+      border-color: var(--primary);
+      box-shadow: 0 0 0 2px rgba(26,115,232,0.2);
+    }
+
+    /* Buttons */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 10px 20px;
+      border-radius: 6px;
+      font-family: 'Google Sans', sans-serif;
+      font-size: 0.9rem;
+      font-weight: 500;
+      cursor: pointer;
+      border: none;
+      transition: all 0.2s ease;
+      text-decoration: none;
+    }
+
+    .btn-primary {
+      background-color: var(--primary);
+      color: white;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+    }
+
+    .btn-primary:hover {
+      background-color: var(--primary-hover);
+      box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    }
+
+    .btn-secondary {
+      background-color: #f1f3f4;
+      color: var(--text);
+    }
+
+    .btn-secondary:hover {
+      background-color: #e8eaed;
+    }
+
+    .btn-block {
+      width: 100%;
+    }
+
+    /* Result Section */
+    .result-banner {
+      background: linear-gradient(90deg, #1e8e3e, #34a853);
+      color: white;
+      padding: 14px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .result-banner.status-PARTIAL {
+      background: linear-gradient(90deg, #f29900, #f9ab00);
+    }
+
+    .result-banner.status-FAILED {
+      background: linear-gradient(90deg, #d93025, #ea4335);
+    }
+
+    .result-banner-text {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 500;
+      font-size: 0.95rem;
+    }
+
+    .meta-metrics {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .metric-box {
+      background-color: #f8f9fa;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 12px 16px;
+    }
+
+    .metric-label {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 4px;
+    }
+
+    .metric-value {
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: var(--text);
+      font-family: 'Google Sans', sans-serif;
+    }
+
+    .metadata-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .metadata-field {
+      border: 1px solid #e0e0e0;
+      border-radius: 6px;
+      padding: 14px 16px;
+      background: #ffffff;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.02);
+    }
+
+    .metadata-field.full-width {
+      grid-column: 1 / -1;
+    }
+
+    .field-title {
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: var(--primary);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .field-content {
+      font-size: 0.95rem;
+      color: var(--text);
+      line-height: 1.45;
+    }
+
+    .escalate-badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 3px 8px;
+      border-radius: 12px;
+      font-size: 0.8rem;
+      font-weight: 700;
+    }
+
+    .escalate-no {
+      background-color: var(--success-light);
+      color: var(--success);
+    }
+
+    .escalate-yes {
+      background-color: var(--danger-light);
+      color: var(--danger);
+    }
+
+    /* JSON & Log Code viewers */
+    details {
+      margin-top: 14px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background-color: #ffffff;
+      overflow: hidden;
+    }
+
+    summary {
+      padding: 12px 16px;
+      background-color: #f8f9fa;
+      font-weight: 500;
+      font-size: 0.875rem;
+      cursor: pointer;
+      user-select: none;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    summary:hover {
+      background-color: #f1f3f4;
+    }
+
+    .code-container {
+      position: relative;
+    }
+
+    pre {
+      background-color: #202124;
+      color: #e8eaed;
+      padding: 14px 16px;
+      font-family: 'Roboto Mono', monospace;
+      font-size: 0.8rem;
+      overflow-x: auto;
+      line-height: 1.4;
+      max-height: 320px;
+    }
+
+    .copy-btn {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      background: rgba(255,255,255,0.15);
+      color: white;
+      border: 1px solid rgba(255,255,255,0.25);
+      border-radius: 4px;
+      padding: 4px 8px;
+      font-size: 0.75rem;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .copy-btn:hover {
+      background: rgba(255,255,255,0.3);
+    }
+
+    /* Audit Log list */
+    .log-list {
+      list-style: none;
+      padding: 12px 16px;
+      background: #fafbfc;
+      font-family: 'Roboto Mono', monospace;
+      font-size: 0.78rem;
+      max-height: 240px;
+      overflow-y: auto;
+    }
+
+    .log-item {
+      padding: 4px 0;
+      border-bottom: 1px solid #edf0f2;
+      display: flex;
+      gap: 12px;
+    }
+
+    .log-stage {
+      font-weight: 700;
+      color: var(--primary);
+      min-width: 120px;
+    }
+
+    .log-level-INFO { color: #5f6368; }
+    .log-level-WARNING { color: #b06000; font-weight: bold; }
+    .log-level-ERROR { color: var(--danger); font-weight: bold; }
+
+    /* Recent Table */
+    .table-responsive {
+      overflow-x: auto;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+      font-size: 0.85rem;
+    }
+
+    th {
+      background-color: #f8f9fa;
+      color: var(--text-muted);
+      font-weight: 500;
+      padding: 10px 14px;
+      border-bottom: 2px solid var(--border);
+      text-transform: uppercase;
+      font-size: 0.72rem;
+      letter-spacing: 0.5px;
+    }
+
+    td {
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border);
+      color: var(--text);
+    }
+
+    tr:hover td {
+      background-color: #f8f9fa;
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 30px;
+      color: var(--text-muted);
+      font-size: 0.9rem;
+    }
+
+    /* Loading overlay */
+    #loading-overlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(255, 255, 255, 0.85);
+      z-index: 1000;
+      backdrop-filter: blur(2px);
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .spinner {
+      width: 48px;
+      height: 48px;
+      border: 4px solid var(--primary-light);
+      border-top-color: var(--primary);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .loading-text {
+      font-family: 'Google Sans', sans-serif;
+      font-size: 1.1rem;
+      font-weight: 500;
+      color: var(--text);
+    }
+
+    .loading-subtext {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Header -->
+  <header>
+    <div class="header-inner">
+      <div class="logo-area">
+        <div class="logo-icon">📊</div>
+        <div class="logo-text">
+          <h1>Customer Service Transcript Parser</h1>
+          <p>Semantic Extraction &amp; BigQuery Warehouse Pipeline</p>
+        </div>
+      </div>
+      <div class="badges">
+        <span class="badge badge-gcp" title="Active GCP Project">
+          ☁️ {{ project_id }}
+        </span>
+        <span class="badge badge-bq" title="BigQuery Destination">
+          🗄️ {{ dataset_id }}.{{ table_id }}
+        </span>
+        <span class="badge badge-model" title="Extraction Model">
+          ✨ Gemini 2.5 Flash
+        </span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main>
+
+    <!-- Flash Alerts -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div class="alerts">
+          {% for category, message in messages %}
+            <div class="alert alert-{{ category }}">
+              <span>{{ message }}</span>
+            </div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+
+    <div class="grid-container">
+
+      <!-- Upload Form Card -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">
+            <span>📥</span> Upload Transcript
+          </div>
+          <span style="font-size: 0.8rem; color: var(--text-muted);">Parses &amp; stores directly to BigQuery</span>
+        </div>
+        <div class="card-body">
+
+          <!-- Tabs -->
+          <div class="tab-bar">
+            <button type="button" class="tab-btn active" onclick="switchTab('file-tab')">Upload File</button>
+            <button type="button" class="tab-btn" onclick="switchTab('text-tab')">Paste Text</button>
+          </div>
+
+          <form id="upload-form" action="{{ url_for('upload') }}" method="POST" enctype="multipart/form-data">
+
+            <!-- File Upload Tab -->
+            <div id="file-tab" class="tab-content active">
+              <div class="drop-zone" id="drop-zone" onclick="document.getElementById('transcript_file').click()">
+                <div class="drop-zone-icon">📄</div>
+                <div class="drop-zone-title">Drag &amp; drop transcript file here, or click to browse</div>
+                <div class="drop-zone-subtitle">Supported formats: .txt, .log, .json (Plain text transcripts)</div>
+                <input type="file" id="transcript_file" name="transcript_file" class="file-input" accept=".txt,.log,.json,text/plain">
+              </div>
+
+              <div id="file-info" class="selected-file-info">
+                <span id="file-name-display">No file selected</span>
+                <button type="button" class="btn btn-secondary" style="padding: 2px 8px; font-size: 0.75rem;" onclick="clearFile(event)">Remove</button>
+              </div>
+            </div>
+
+            <!-- Direct Paste Tab -->
+            <div id="text-tab" class="tab-content">
+              <div class="form-group">
+                <label for="transcript_text">Paste Transcript Notes / Call Log:</label>
+                <textarea id="transcript_text" name="transcript_text" class="form-control" placeholder="Call ID: CS-1002&#10;Date: 2026-07-02 10:00 UTC&#10;Customer: Alex Doe&#10;Agent: Sarah Lee&#10;Product: Cloud Portal&#10;Issue: Cannot connect to VPN&#10;Resolution: Guided user to reset token&#10;Escalate: no&#10;&#10;Transcript:&#10;Customer called about VPN timeout error..."></textarea>
+              </div>
+              <div class="form-group">
+                <label for="source_name">Reference File / Session Name (optional):</label>
+                <input type="text" id="source_name" name="source_name" class="form-control" placeholder="call-notes-session-02.txt">
+              </div>
+            </div>
+
+            <!-- Submit Action -->
+            <div style="margin-top: 20px;">
+              <button type="submit" id="submit-btn" class="btn btn-primary btn-block">
+                <span>🚀 Process &amp; Ingest to BigQuery</span>
+              </button>
+            </div>
+
+          </form>
+        </div>
+      </div>
+
+      <!-- Result Card (Extracted Metadata) -->
+      {% if result and metadata %}
+      <div class="card" id="metadata-results">
+        <!-- Result Banner -->
+        <div class="result-banner status-{{ result.status }}">
+          <div class="result-banner-text">
+            <span>✅</span>
+            <span>Transcript Parsed &amp; Recorded to BigQuery ({{ dataset_id }}.{{ table_id }})</span>
+          </div>
+          <span class="badge" style="background: rgba(255,255,255,0.25); color: white;">
+            Status: {{ result.status }}
+          </span>
+        </div>
+
+        <div class="card-body">
+          <!-- Summary Metrics -->
+          <div class="meta-metrics">
+            <div class="metric-box">
+              <div class="metric-label">Call Reference ID</div>
+              <div class="metric-value">{{ metadata.call_id or 'N/A' }}</div>
+            </div>
+            <div class="metric-box">
+              <div class="metric-label">Customer</div>
+              <div class="metric-value">{{ metadata.customer or 'Unknown' }}</div>
+            </div>
+            <div class="metric-box">
+              <div class="metric-label">Support Agent</div>
+              <div class="metric-value">{{ metadata.agent or 'Unknown' }}</div>
+            </div>
+            <div class="metric-box">
+              <div class="metric-label">Processing Time</div>
+              <div class="metric-value">{{ result.execution_time_seconds }}s</div>
+            </div>
+          </div>
+
+          <h3 style="font-family: 'Google Sans', sans-serif; font-size: 1rem; margin-bottom: 12px; color: var(--text);">
+            Posted Metadata Fields
+          </h3>
+
+          <!-- Metadata Fields Grid -->
+          <div class="metadata-grid">
+            <div class="metadata-field">
+              <div class="field-title">🏷️ Call ID</div>
+              <div class="field-content"><strong>{{ metadata.call_id or 'Not specified' }}</strong></div>
+            </div>
+
+            <div class="metadata-field">
+              <div class="field-title">📅 Date &amp; Time</div>
+              <div class="field-content">{{ metadata.date or 'Not specified' }}</div>
+            </div>
+
+            <div class="metadata-field">
+              <div class="field-title">👤 Customer</div>
+              <div class="field-content">{{ metadata.customer or 'Not specified' }}</div>
+            </div>
+
+            <div class="metadata-field">
+              <div class="field-title">🎧 Agent</div>
+              <div class="field-content">{{ metadata.agent or 'Not specified' }}</div>
+            </div>
+
+            <div class="metadata-field">
+              <div class="field-title">📦 Product / Service</div>
+              <div class="field-content">{{ metadata.product or 'Not specified' }}</div>
+            </div>
+
+            <div class="metadata-field">
+              <div class="field-title">⚠️ Escalation Needed</div>
+              <div class="field-content">
+                {% if metadata.escalate|lower == 'yes' or (metadata.escalate|lower != 'no' and metadata.escalate != '') %}
+                  <span class="escalate-badge escalate-yes">⚠️ {{ metadata.escalate }}</span>
+                {% else %}
+                  <span class="escalate-badge escalate-no">✓ No</span>
+                {% endif %}
+              </div>
+            </div>
+
+            <div class="metadata-field full-width">
+              <div class="field-title">❗ Reported Issue</div>
+              <div class="field-content">{{ metadata.issue or 'No summary provided' }}</div>
+            </div>
+
+            <div class="metadata-field full-width">
+              <div class="field-title">💡 Resolution &amp; Actions</div>
+              <div class="field-content">{{ metadata.resolution or 'No resolution recorded' }}</div>
+            </div>
+          </div>
+
+          <!-- Raw JSON Details Dropdown -->
+          <details>
+            <summary>
+              <span>{ } View Structured JSON Metadata</span>
+              <span style="font-size: 0.75rem; color: var(--text-muted);">Output payload</span>
+            </summary>
+            <div class="code-container">
+              <button class="copy-btn" onclick="copyJson()">Copy JSON</button>
+              <pre id="json-pre"><code>{{ raw_json }}</code></pre>
+            </div>
+          </details>
+
+          <!-- Pipeline Logs Dropdown -->
+          <details>
+            <summary>
+              <span>📜 Pipeline Lifecycle &amp; Audit Logs ({{ result.log_history|length }} stages)</span>
+              <span style="font-size: 0.75rem; color: var(--text-muted);">Stages &amp; Latency</span>
+            </summary>
+            <ul class="log-list">
+              {% for entry in result.log_history %}
+                <li class="log-item">
+                  <span style="color: #80868b; min-width: 170px;">{{ entry.timestamp }}</span>
+                  <span class="log-stage">[{{ entry.stage }}]</span>
+                  <span class="log-level-{{ entry.level }}">{{ entry.level }}:</span>
+                  <span>{{ entry.message }}</span>
+                </li>
+              {% endfor %}
+            </ul>
+          </details>
+
+        </div>
+      </div>
+      {% endif %}
+
+      <!-- Recent Transcripts in BigQuery Card -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">
+            <span>🗄️</span> Recent Transcripts in BigQuery (<code>{{ dataset_id }}.{{ table_id }}</code>)
+          </div>
+          <span style="font-size: 0.8rem; color: var(--text-muted);">Latest records persisted in warehouse</span>
+        </div>
+        <div class="card-body" style="padding: 0;">
+          <div class="table-responsive">
+            {% if recent_records %}
+            <table>
+              <thead>
+                <tr>
+                  <th>Processed At</th>
+                  <th>Call ID</th>
+                  <th>Customer</th>
+                  <th>Agent</th>
+                  <th>Product</th>
+                  <th>Escalate</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for r in recent_records %}
+                <tr>
+                  <td style="color: var(--text-muted); font-size: 0.78rem;">{{ r.processed_at }}</td>
+                  <td><strong>{{ r.call_id or '—' }}</strong></td>
+                  <td>{{ r.customer or '—' }}</td>
+                  <td>{{ r.agent or '—' }}</td>
+                  <td>{{ r.product or '—' }}</td>
+                  <td>
+                    {% if r.escalate|lower == 'yes' or (r.escalate|lower != 'no' and r.escalate != '' and r.escalate is not none) %}
+                      <span class="escalate-badge escalate-yes">{{ r.escalate }}</span>
+                    {% else %}
+                      <span class="escalate-badge escalate-no">No</span>
+                    {% endif %}
+                  </td>
+                  <td>
+                    <span style="font-size: 0.75rem; padding: 2px 6px; border-radius: 4px; background: {% if r.status == 'SUCCESS' %}var(--success-light); color: var(--success);{% else %}var(--warning-light); color: #b06000;{% endif %}">
+                      {{ r.status }}
+                    </span>
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+            {% else %}
+            <div class="empty-state">
+              No transcript records in BigQuery yet. Upload a transcript to get started!
+            </div>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </main>
+
+  <!-- Loading Overlay -->
+  <div id="loading-overlay">
+    <div class="spinner"></div>
+    <div class="loading-text">Processing Transcript with Gemini &amp; BigQuery</div>
+    <div class="loading-subtext">Extracting metadata and persisting to warehouse...</div>
+  </div>
+
+  <script>
+    // Tab switching
+    function switchTab(tabId) {
+      document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+      
+      if (tabId === 'file-tab') {
+        document.querySelectorAll('.tab-btn')[0].classList.add('active');
+        document.getElementById('file-tab').classList.add('active');
+      } else {
+        document.querySelectorAll('.tab-btn')[1].classList.add('active');
+        document.getElementById('text-tab').classList.add('active');
+      }
+    }
+
+    // Drag and drop setup
+    const dropZone = document.getElementById('drop-zone');
+    const fileInput = document.getElementById('transcript_file');
+    const fileInfo = document.getElementById('file-info');
+    const fileNameDisplay = document.getElementById('file-name-display');
+
+    if (dropZone && fileInput) {
+      ['dragenter', 'dragover'].forEach(eventName => {
+        dropZone.addEventListener(eventName, (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          dropZone.classList.add('dragover');
+        });
+      });
+
+      ['dragleave', 'drop'].forEach(eventName => {
+        dropZone.addEventListener(eventName, (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          dropZone.classList.remove('dragover');
+        });
+      });
+
+      dropZone.addEventListener('drop', (e) => {
+        if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+          fileInput.files = e.dataTransfer.files;
+          handleFileSelect(fileInput.files[0]);
+        }
+      });
+
+      fileInput.addEventListener('change', () => {
+        if (fileInput.files.length > 0) {
+          handleFileSelect(fileInput.files[0]);
+        }
+      });
+    }
+
+    function handleFileSelect(file) {
+      fileNameDisplay.textContent = `Selected: ${file.name} (${(file.size / 1024).toFixed(1)} KB)`;
+      fileInfo.classList.add('visible');
+    }
+
+    function clearFile(event) {
+      event.stopPropagation();
+      fileInput.value = '';
+      fileNameDisplay.textContent = 'No file selected';
+      fileInfo.classList.remove('visible');
+    }
+
+    // Form submit loading overlay
+    const form = document.getElementById('upload-form');
+    const overlay = document.getElementById('loading-overlay');
+    if (form) {
+      form.addEventListener('submit', () => {
+        overlay.style.display = 'flex';
+      });
+    }
+
+    // Copy JSON button
+    function copyJson() {
+      const code = document.getElementById('json-pre').innerText;
+      navigator.clipboard.writeText(code).then(() => {
+        const btn = document.querySelector('.copy-btn');
+        const orig = btn.innerText;
+        btn.innerText = 'Copied!';
+        setTimeout(() => btn.innerText = orig, 2000);
+      });
+    }
+
+    // Auto scroll to results if present
+    window.addEventListener('DOMContentLoaded', () => {
+      const results = document.getElementById('metadata-results');
+      if (results) {
+        results.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    });
+  </script>
+</body>
+</html>
